@@ -44,6 +44,13 @@ export async function categorizeAndLearnText(analyzerId, text) {
   return category;
 }
 
+export async function recategorizeText(analyzerId, oldCategory, newCategory, text) {
+  const analyzer = await fetchAnalyzer(analyzerId);
+  analyzer.unlearn(text, oldCategory);
+  analyzer.learn(text, newCategory);
+  await saveAnalyzer(analyzerId, analyzer);
+}
+
 export async function createAnalyzer(name) {
   const analyzer = new TextAnalyzer();
   return aDbService.saveAnalyzerRecord({
