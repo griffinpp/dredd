@@ -111,7 +111,7 @@ EntityTooLargeError.prototype.constructor = InternalError;
 export function sendError(res) {
   return (error) => {
     /* eslint no-console: */
-    console.error(error);
+    console.error(error.stack);
     if (!error.statusCode) {
       res.status(500).json({ code: 500, message: error.message });
     } else {

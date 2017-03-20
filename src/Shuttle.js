@@ -80,6 +80,7 @@ Shuttle.liftRequest = (req) => {
   s.rawData = req.rawBody;
   s.query = req.query;
   s.requester = req.user;
+  s.session = req.session;
   s.requestUrlBase = `${req.protocol}://${req.headers.host}`;
   return Promise.resolve(s);
 };
@@ -118,40 +119,7 @@ Shuttle.liftRequest = (req) => {
  */
 Shuttle.liftFunction = (fn, ...keys) => {
   return async (shuttle) => {
-    const args = [];
-    // this needs to happen in order, so using a loop instead of .map
-    for (let i = 0; i < keys.length; i++) {
-      const deepKey = keys[i];
-      if (deepKey === null) {
-        args.push(null);
-      } else {
-        let val = null;
-        const splitKey = deepKey.split('.');
-        for (let j = 0; j < splitKey.length; j++) {
-          const key = splitKey[j];
-          if (j === 0) {
-            if (helpers.exists(shuttle[key])) {
-              val = shuttle[key];
-            } else {
-              // we can't find the property, set the value to null, and don't go through the rest of the loop
-              val = null;
-              j = splitKey.length;
-            }
-          } else {
-            // So eslint wants this block to be refactored into an else if and an else, but that just makes things totally confusing to read
-            // eslint-disable-next-line
-            if (helpers.exists(val[key])) {
-              val = val[key];
-            } else {
-              // can't find the nested property. set the value to null, and don't go through the rest of the loop
-              val = null;
-              j = splitKey.length;
-            }
-          }
-        }
-        args.push(val);
-      }
-    }
+    const args = getValuesByKeys(shuttle, keys);
     // preserve request and parameter data
     const newShuttle = shuttle;
     const result = await fn(...args);
@@ -159,6 +127,101 @@ Shuttle.liftFunction = (fn, ...keys) => {
     return Promise.resolve(newShuttle);
   };
 };
+
+// this function will place the result of the specified function into shuttle.<newKey>
+// it will overwrite any existing data, and will create objects as needed to recreate the chain of keys specified.
+Shuttle.liftMutatingFunction = (newKey, fn, ...keys) => {
+  return async (shuttle) => {
+    const args = getValuesByKeys(shuttle, keys);
+    // preserve request and parameter data
+    const newShuttle = shuttle;
+    const result = await fn(...args);
+    setValueAtKey(newShuttle, newKey, result);
+    return Promise.resolve(newShuttle);
+  };
+};
+
+Shuttle.liftMutatingValue = (newKey, value) => {
+  return async (shuttle) => {
+    const newShuttle = shuttle;
+    setValueAtKey(newShuttle, newKey, value);
+    return Promise.resolve(newShuttle);
+  };
+};
+
+// this function is for executing functions that have no effect on the data in the shuttle.
+Shuttle.liftSideEffectFunction = (fn, ...keys) => {
+  return async (shuttle) => {
+    const args = getValuesByKeys(shuttle, keys);
+    await fn(...args);
+    return Promise.resolve(shuttle);
+  };
+};
+
+function getValuesByKeys(shuttle, keys) {
+  const args = [];
+  // this needs to happen in order, so using a loop instead of .map
+  for (let i = 0; i < keys.length; i++) {
+    const deepKey = keys[i];
+    if (deepKey === null) {
+      args.push(null);
+    } else {
+      let val = null;
+      const splitKey = deepKey.split('.');
+      for (let j = 0; j < splitKey.length; j++) {
+        const key = splitKey[j];
+        if (j === 0) {
+          if (helpers.exists(shuttle[key])) {
+            val = shuttle[key];
+          } else {
+            // we can't find the property, set the value to null, and don't go through the rest of the loop
+            val = null;
+            j = splitKey.length;
+          }
+        } else {
+          // So eslint wants this block to be refactored into an else if and an else, but that just makes things totally confusing to read
+          // eslint-disable-next-line
+          if (helpers.exists(val[key])) {
+            val = val[key];
+          } else {
+            // can't find the nested property. set the value to null, and don't go through the rest of the loop
+            val = null;
+            j = splitKey.length;
+          }
+        }
+      }
+      args.push(val);
+    }
+  }
+  return args;
+}
+
+function setValueAtKey(shuttle, key, value) {
+  const rawSplit = key.split(/[\[\]\.]/); // eslint-disable-line
+  const splitKey = rawSplit.filter((item) => {
+    return item !== '';
+  });
+  let obj = shuttle;
+  for (let i = 0; i < splitKey.length; i++) {
+    const currentKey = splitKey[i];
+    if (!helpers.exists(obj[currentKey])) {
+      // if the next key isn't a zero (indicating that we are intending to create an array)
+      if (helpers.exists(splitKey[i + 1]) && splitKey[i + 1] !== '0') {
+        obj[currentKey] = {};
+      } else {
+        obj[currentKey] = [];
+      }
+    }
+
+    // if this is the last loop
+    if (i === splitKey.length - 1) {
+      obj[currentKey] = value;
+    // otherwise, move to next level
+    } else {
+      obj = obj[currentKey];
+    }
+  }
+}
 
 /**
  * A pluggable function to print the contents of a shuttle inline

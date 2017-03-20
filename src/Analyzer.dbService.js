@@ -6,24 +6,23 @@ import * as errors from './errors';
 
 const db = new Pouch('http://127.0.0.1:5984/lucy');
 
-export async function getAllAnalyzers() {
-  const result = await db.query('names/all');
-  return result.rows;
-}
-
-export function getAnalyzerRecord(id) {
-  return db.get(id);
-}
-
-export function saveAnalyzerRecord(analyzer) {
-  return db.put(analyzer);
-}
-
-export async function addAnalyzer(name, categories) {
-  // create id, save record for analyzer
-  const id = generateAnalyzerId();
-  const analyzer = {
+export async function addUser(name) {
+  const id = generateUserId();
+  const user = {
     _id: id,
+    name,
+    type: 'user',
+  };
+  await saveRecord(user);
+  return id;
+}
+
+export async function addAnalyzer(userId, name, categories) {
+  // create id, save record for analyzer
+  const analyzerId = generateAnalyzerId();
+  const dbAnalyzerId = getAnalyzerId(userId, analyzerId);
+  const analyzer = {
+    _id: dbAnalyzerId,
     name,
     totalDocCount: 0,
     totalTokenCount: 0,
@@ -35,15 +34,31 @@ export async function addAnalyzer(name, categories) {
   // if categories exists and is longer than 0
   if (exists(categories) && exists(categories.length) && categories.length > 0) {
     for (let i = 0; i < categories.length; i++) {
-      await addCategory(id, categories[i]);
+      await addCategory(userId, analyzerId, categories[i]);
     }
   }
-  return id;
+  return analyzer;
 }
 
-export async function addCategory(analyzerId, name) {
+export async function removeAnalyzer(userId, analyzerId) {
+  const records = await fetchAllRecordsForAnalyzer(userId, analyzerId);
+  for (let i = 0; i < records.rows.length; i++) {
+    const doc = records.rows[i].doc;
+    doc._deleted = true;
+    await saveRecord(doc);
+  }
+}
+
+export async function editAnalyzerName(userId, analyzerId, name) {
+  const analyzer = await fetchAnalyzer(userId, analyzerId);
+  analyzer.name = name;
+  await saveRecord(analyzer);
+  return analyzer;
+}
+
+export async function addCategory(userId, analyzerId, name) {
   // fetch analyzer
-  const analyzer = await fetchAnalyzer(analyzerId);
+  const analyzer = await fetchAnalyzer(userId, analyzerId);
 
   // make sure we don't already have this category in this analyzer
   if (analyzer.categories.includes(name)) {
@@ -51,7 +66,7 @@ export async function addCategory(analyzerId, name) {
   }
 
   // use analyzer id to create category id, save record for category
-  const catId = getCategoryId(analyzerId, name);
+  const catId = getCategoryId(userId, analyzerId, name);
   const category = {
     _id: catId,
     name,
@@ -69,14 +84,14 @@ export async function addCategory(analyzerId, name) {
 }
 
 // note that we're not updating the total count on the analyzer itself, that will need to happen elsewhere
-export async function addAnalyzerToken(analyzerId, token) {
-  const existing = await fetchAnalyzerToken(analyzerId, token);
+export async function addAnalyzerToken(userId, analyzerId, token) {
+  const existing = await fetchAnalyzerToken(userId, analyzerId, token);
   if (exists(existing)) {
     existing.count += 1;
     await saveRecord(existing);
   } else {
     const newToken = {
-      _id: getAnalyzerTokenId(analyzerId, token),
+      _id: getAnalyzerTokenId(userId, analyzerId, token),
       type: 'analyzerToken',
       count: 1,
     };
@@ -84,8 +99,8 @@ export async function addAnalyzerToken(analyzerId, token) {
   }
 }
 
-export async function removeAnalyzerToken(analyzerId, token) {
-  const existing = await fetchAnalyzerToken(analyzerId, token);
+export async function removeAnalyzerToken(userId, analyzerId, token) {
+  const existing = await fetchAnalyzerToken(userId, analyzerId, token);
   if (existing.count > 0) {
     existing.count -= 1;
     await saveRecord(existing);
@@ -93,14 +108,14 @@ export async function removeAnalyzerToken(analyzerId, token) {
 }
 
 // note that we're not updating the total count on the category itself, that will need to happen elsewhere
-export async function addCategoryToken(analyzerId, category, token) {
-  const existing = await fetchCategoryToken(analyzerId, category, token);
+export async function addCategoryToken(userId, analyzerId, category, token) {
+  const existing = await fetchCategoryToken(userId, analyzerId, category, token);
   if (exists(existing)) {
     existing.count += 1;
     await saveRecord(existing);
   } else {
     const newToken = {
-      _id: getCategoryTokenId(analyzerId, category, token),
+      _id: getCategoryTokenId(userId, analyzerId, category, token),
       type: 'categoryToken',
       count: 1,
     };
@@ -108,59 +123,75 @@ export async function addCategoryToken(analyzerId, category, token) {
   }
 }
 
-export async function removeCategoryToken(analyzerId, category, token) {
-  const existing = await fetchCategoryToken(analyzerId, category, token);
+export async function removeCategoryToken(userId, analyzerId, category, token) {
+  const existing = await fetchCategoryToken(userId, analyzerId, category, token);
   if (existing.count > 0) {
     existing.count -= 1;
     await saveRecord(existing);
   }
 }
 
-export function fetchAnalyzer(analyzerId) {
-  return fetchRecord(analyzerId);
+export function fetchAnalyzer(userId, analyzerId) {
+  const dbAnalyzerId = getAnalyzerId(userId, analyzerId);
+  return fetchRecord(dbAnalyzerId);
 }
 
-export function fetchCategory(analyzerId, name) {
-  const categoryId = getCategoryId(analyzerId, name);
+export function fetchCategory(userId, analyzerId, name) {
+  const categoryId = getCategoryId(userId, analyzerId, name);
   return fetchRecord(categoryId);
 }
 
-export function fetchAnalyzerToken(analyzerId, token) {
-  const tokenId = getAnalyzerTokenId(analyzerId, token);
+export function fetchAnalyzerToken(userId, analyzerId, token) {
+  const tokenId = getAnalyzerTokenId(userId, analyzerId, token);
   return fetchRecord(tokenId);
 }
 
-export function fetchCategoryToken(analyzerId, category, token) {
-  const tokenId = getCategoryTokenId(analyzerId, category, token);
+export function fetchCategoryToken(userId, analyzerId, category, token) {
+  const tokenId = getCategoryTokenId(userId, analyzerId, category, token);
   return fetchRecord(tokenId);
 }
 
-export function fetchAnalyzerRecords() {
+export function fetchAnalyzerRecords(userId) {
   return db.query('analyzers', {
-    include_docs: false,
-  });
-}
-
-export function fetchCategoryRecords(analyzerId) {
-  return db.query('categories', {
-    startkey: `${analyzerId}`,
-    endkey: `${analyzerId}uffff`,
+    startkey: userId,
+    endkey: `${userId}uffff`,
     include_docs: true,
   });
 }
 
-export function fetchCategoryTokens(analyzerId, category) {
-  return db.allDocs({ 
-    startkey: `${analyzerId}/$CAT$${category}/$TOKEN$`,
-    endkey: `${analyzerId}/$CAT$${category}/$TOKEN$uffff`,
-    include_docs: true,
-  });
-}
-
-export function fetchAnalyzerTokens(analyzerId) {
+// get all documents associated with an analyzer, presumably for deletion
+export function fetchAllRecordsForAnalyzer(userId, analyzerId) {
+  const startkey = getAnalyzerId(userId, analyzerId);
   return db.allDocs({
-    startkey: `${analyzerId}/$TOKEN$`,
-    endkey: `${analyzerId}/$TOKEN$uffff`,
+    startkey,
+    endkey: `${startkey}uffff`,
+    include_docs: true,
+  });
+}
+
+export function fetchCategoryRecords(userId, analyzerId) {
+  const dbAnalyzerId = getAnalyzerId(userId, analyzerId);
+  return db.query('categories', {
+    startkey: dbAnalyzerId,
+    endkey: `${dbAnalyzerId}uffff`,
+    include_docs: true,
+  });
+}
+
+export function fetchCategoryTokens(userId, analyzerId, category) {
+  const dbAnalyzerId = getAnalyzerId(userId, analyzerId);
+  return db.allDocs({ 
+    startkey: `${dbAnalyzerId}/$CAT$${category}/$TOKEN$`,
+    endkey: `${dbAnalyzerId}/$CAT$${category}/$TOKEN$uffff`,
+    include_docs: true,
+  });
+}
+
+export function fetchAnalyzerTokens(userId, analyzerId) {
+  const dbAnalyzerId = getAnalyzerId(userId, analyzerId);
+  return db.allDocs({
+    startkey: `${dbAnalyzerId}/$TOKEN$`,
+    endkey: `${dbAnalyzerId}/$TOKEN$uffff`,
     include_docs: true,
   });
 }
@@ -179,19 +210,29 @@ export function fetchRecord(id) {
     })
 }
 
+function generateUserId() {
+  return uuid.v4();
+}
+
 function generateAnalyzerId() {
   return uuid.v4();
 }
 
-export function getCategoryId(analyzerId, category) {
-  return `${analyzerId}/$CAT$${category}`
+export function getAnalyzerId(userId, analyzerId) {
+  return `${userId}/${analyzerId}`;
 }
 
-export function getAnalyzerTokenId(analyzerId, token) {
-  return `${analyzerId}/$TOKEN$${token}`
+export function getCategoryId(userId, analyzerId, category) {
+  const dbAnalyzerId = getAnalyzerId(userId, analyzerId);
+  return `${dbAnalyzerId}/$CAT$${category}`
 }
 
-export function getCategoryTokenId(analyzerId, category, token) {
-  const catId = getCategoryId(analyzerId, category);
+export function getAnalyzerTokenId(userId, analyzerId, token) {
+  const dbAnalyzerId = getAnalyzerId(userId, analyzerId);
+  return `${dbAnalyzerId}/$TOKEN$${token}`
+}
+
+export function getCategoryTokenId(userId, analyzerId, category, token) {
+  const catId = getCategoryId(userId, analyzerId, category);
   return `${catId}/$TOKEN$${token}`;
 }

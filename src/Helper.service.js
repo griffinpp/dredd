@@ -4,3 +4,11 @@ export function exists(item) {
   }
   return false;
 }
+
+export function splitAnalyzerId(id) {
+  const split = id.split('/');
+  return {
+    userId: split[0],
+    analyzerId: split[1]
+  };
+}

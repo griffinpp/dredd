@@ -4,12 +4,12 @@ import { exists } from './Helper.service';
 import * as aDbService from './Analyzer.dbService';
 // import TextAnalyzer from './TextAnalyzer';
 
-export async function learn(analyzerId, text, category) {
-  const analyzer = await aDbService.fetchAnalyzer(analyzerId);
-  let cat = await aDbService.fetchCategory(analyzerId, category);
+export async function learn(userId, analyzerId, text, category) {
+  const analyzer = await aDbService.fetchAnalyzer(userId, analyzerId);
+  let cat = await aDbService.fetchCategory(userId, analyzerId, category);
   // create the category if it doesn't exist
   if (!exists(cat)) {
-    cat = await aDbService.addCategory(analyzerId, category);
+    cat = await aDbService.addCategory(userId, analyzerId, category);
   }
   // increment analyzer doc count
   analyzer.totalDocCount += 1;
@@ -27,15 +27,15 @@ export async function learn(analyzerId, text, category) {
   for (let i = 0; i < tokens.length; i++) {
     const token = tokens[i];
     // increment count for analyzer token
-    await aDbService.addAnalyzerToken(analyzerId, token);
+    await aDbService.addAnalyzerToken(userId, analyzerId, token);
     // increment count for category token
-    await aDbService.addCategoryToken(analyzerId, category, token);
+    await aDbService.addCategoryToken(userId, analyzerId, category, token);
   }
 }
 
-export async function unlearn(analyzerId, text, category) {
-  const analyzer = await aDbService.fetchAnalyzer(analyzerId);
-  const cat = await aDbService.fetchCategory(analyzerId, category);
+export async function unlearn(userId, analyzerId, text, category) {
+  const analyzer = await aDbService.fetchAnalyzer(userId, analyzerId);
+  const cat = await aDbService.fetchCategory(userId, analyzerId, category);
   // decrement analyzer doc count
   analyzer.totalDocCount -= 1;
   // decrement category doc count
@@ -52,17 +52,22 @@ export async function unlearn(analyzerId, text, category) {
   for (let i = 0; i < tokens.length; i++) {
     const token = tokens[i];
     // decrement count for analyzer token
-    await aDbService.removeAnalyzerToken(analyzerId, token);
+    await aDbService.removeAnalyzerToken(userId, analyzerId, token);
     // decrement count for category token
-    await aDbService.removeCategoryToken(analyzerId, category, token);
+    await aDbService.removeCategoryToken(userId, analyzerId, category, token);
   }
 }
 
-export async function categorize(analyzerId, text) {
+export async function relearn(userId, analyzerId, text, oldCategory, newCategory) {
+  await unlearn(userId, analyzerId, text, oldCategory);
+  await learn(userId, analyzerId, text, newCategory);
+}
+
+export async function categorize(userId, analyzerId, text) {
   const rawResults = [];
   let totalSum = 0.0;
-  const analyzer = await aDbService.fetchAnalyzer(analyzerId);
-  const aTokens = await aDbService.fetchAnalyzerTokens(analyzerId);
+  const analyzer = await aDbService.fetchAnalyzer(userId, analyzerId);
+  const aTokens = await aDbService.fetchAnalyzerTokens(userId, analyzerId);
   // get list of categories from analyzer
   // generate tokens
   const tokens = tokenizer(text);
@@ -73,16 +78,16 @@ export async function categorize(analyzerId, text) {
     // console.log('********');
     // console.log('********');
     // console.log('CATEGORY', category);
-    const cat = await aDbService.fetchCategory(analyzerId, category);
-    const catTokens = await aDbService.fetchCategoryTokens(analyzerId, category);
+    const cat = await aDbService.fetchCategory(userId, analyzerId, category);
+    const catTokens = await aDbService.fetchCategoryTokens(userId, analyzerId, category);
     // calculate pCategory (category.totalDocCount /analyzer.totalDocCount)
     const pCategory = cat.totalDocCount / analyzer.totalDocCount;
     // console.log('pCategory', pCategory);
     // for each token
     for (let j = 0; j < tokens.length; j++) {
       const token = tokens[j];
-      const aTokenId = aDbService.getAnalyzerTokenId(analyzerId, token);
-      const catTokenId = aDbService.getCategoryTokenId(analyzerId, category, token);
+      const aTokenId = aDbService.getAnalyzerTokenId(userId, analyzerId, token);
+      const catTokenId = aDbService.getCategoryTokenId(userId, analyzerId, category, token);
       // console.log('----');
       // console.log('TOKEN: ', token);
       const aToken = aTokens.rows.find((t) => {
@@ -137,77 +142,3 @@ export async function categorize(analyzerId, text) {
     return b;
   });
 }
-
-// export async function feedback(analyzerId, text) {
-//   // categorize, then learn
-// }
-
-// export async function fetchAnalyzer(id) {
-//   const record = await aDbService.getAnalyzerRecord(id);
-//   const a = new TextAnalyzer();
-//   a.fromJSON(record.state);
-//   return a;
-// }
-
-// export async function saveAnalyzer(id, analyzer) {
-//   const record = await aDbService.getAnalyzerRecord(id);
-//   record.state = analyzer.toJSON();
-//   await aDbService.saveAnalyzerRecord(record);
-// }
-
-// export function fetchAllAnalyzers() {
-//   return aDbService.getAllAnalyzers();
-// }
-
-// export async function categorizeText(analyzerId, text) {
-//   const analyzer = await fetchAnalyzer(analyzerId);
-//   return analyzer.categorize(text)[0];
-// }
-
-// export async function learnText(analyzerId, category, text) {
-//   const analyzer = await fetchAnalyzer(analyzerId);
-//   analyzer.learn(text, category);
-//   await saveAnalyzer(analyzerId, analyzer);
-// }
-
-// export async function unlearnText(analyzerId, category, text) {
-//   const analyzer = await fetchAnalyzer(analyzerId);
-//   analyzer.unlearn(text, category);
-//   await saveAnalyzer(analyzerId, analyzer);
-// }
-
-// export async function categorizeAndLearnText(analyzerId, text) {
-//   const analyzer = await fetchAnalyzer(analyzerId);
-//   const category = analyzer.categorize(text)[0];
-//   analyzer.learn(category, text);
-//   await saveAnalyzer(analyzerId, analyzer);
-//   return category;
-// }
-
-// export async function recategorizeText(analyzerId, oldCategory, newCategory, text) {
-//   const analyzer = await fetchAnalyzer(analyzerId);
-//   analyzer.unlearn(text, oldCategory);
-//   analyzer.learn(text, newCategory);
-//   await saveAnalyzer(analyzerId, analyzer);
-// }
-
-// export async function createAnalyzer(name) {
-//   const analyzer = new TextAnalyzer();
-//   return aDbService.saveAnalyzerRecord({
-//     _id: uuid.v4(),
-//     name,
-//     state: analyzer.toJSON(),
-//   });
-// }
-
-// export async function deleteAnalyzer(id) {
-//   const record = await aDbService.getAnalyzerRecord(id);
-//   record._deleted = true;
-//   await aDbService.saveAnalyzerRecord(record);
-// }
-
-// export async function editAnalyzerName(id, name) {
-//   const record = await aDbService.getAnalyzerRecord(id);
-//   record.name = name;
-//   await aDbService.saveAnalyzerRecord(record);
-// }

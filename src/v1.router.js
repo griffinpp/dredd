@@ -4,14 +4,15 @@ import * as aController from './Analyzer.controller';
 // eslint-disable-next-line new-cap
 const router = express.Router();
 
-router.get('/:id/categorize', aController.categorize);
-router.put('/:id/categorizeLearn', aController.categorizeAndLearn);
-router.put('/:id/learn', aController.learn);
-router.put('/:id/unlearn', aController.unlearn);
-router.put('/:id/recategorize', aController.recategorize);
-router.get('/', aController.getAllAnalyzers);
-router.delete('/:id', aController.deleteAnalyzer);
-router.post('/', aController.createAnalyzer);
-router.put('/:id', aController.editAnalyzerName);
+router.post('/:userId/analyzers/:analyzerId/categorize', aController.categorize);
+router.post('/user', aController.createUser);
+router.patch('/:userId/analyzers/:analyzerId/learn', aController.learn);
+router.patch('/:userId/analyzers/:analyzerId/unlearn', aController.unlearn);
+router.patch('/:userId/analyzers/:analyzerId/relearn', aController.relearn);
+router.get('/:userId/analyzers', aController.getAnalyzers);
+router.post('/:userId/analyzers', aController.createAnalyzer);
+router.get('/:userId/analyzers/:analyzerId', aController.getAnalyzer);
+router.put('/:userId/analyzers/:analyzerId', aController.editAnalyzerName);
+router.delete('/:userId/analyzers/:analyzerId', aController.removeAnalyzer);
 
 export default router;
