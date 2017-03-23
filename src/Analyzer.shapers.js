@@ -24,10 +24,8 @@ export function shapeOutgoingAnalyzer(data) {
   const id = exists(data.id) ? data.id : data._id;
   const { analyzerId } = splitAnalyzerId(id);
   const name = exists(data.doc) ? data.doc.name : data.name;
-  const categories = exists(data.doc) ? data.doc.categories : data.categories;
   return {
     id: analyzerId,
     name,
-    categories,
   };
 }

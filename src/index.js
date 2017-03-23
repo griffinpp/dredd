@@ -6,8 +6,8 @@ test();
 
 async function test() {
   try {
-    const userId = '03a1e853-f9ed-46d2-bf70-3077a88dc017';
-    const analyzerId = '3feacda8-8c78-4ed6-8fd3-95f6f11a4dcb';
+    const userId = 'cca75a89-865a-406d-8b70-445672d5aa5d';
+    const analyzerId = 'e96dd359-f3a8-4cb0-afec-ad9f076e968a';
 
     // const userId = await aDbService.addUser('Demo');
     // console.log(userId);
