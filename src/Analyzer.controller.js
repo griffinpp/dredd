@@ -12,7 +12,7 @@ export function createUser(req, res) {
   return Promise.resolve(Shuttle.liftRequest(req))
     .then(Shuttle.liftSideEffectFunction(validatePasswordsExist, 'data.password1', 'data.password2'))
     .then(Shuttle.liftSideEffectFunction(validatePasswordMatch, 'data.password1', 'data.password2'))
-    .then(Shuttle.liftMutatingFunction('data', aDbService.addUser, 'data.name', 'data.password1', 'data.password2'))
+    .then(Shuttle.liftMutatingFunction('data', aDbService.addUser, 'data.name', 'data.password1'))
     .then(Shuttle.liftMutatingFunction('data', shaper.shapeOutgoingUserId, 'data'))
     .then(successes.sendCreated(res))
     .catch(errors.sendError(res));
@@ -47,19 +47,19 @@ export function relearn(req, res) {
     .catch(errors.sendError(res));
 }
 
-export function getAnalyzers(req, res) {
-  return Promise.resolve(Shuttle.liftRequest(req))
-    .then(Shuttle.liftMutatingFunction('data', aDbService.fetchAnalyzerRecords, 'requester.userId'))
-    .then(Shuttle.liftMutatingFunction('data', shaper.shapeOutgoingAnalyzerArray, 'data.rows'))
-    .then(successes.sendSuccess(res))
-    .catch(errors.sendError(res));
-}
-
 export function createAnalyzer(req, res) {
   return Promise.resolve(Shuttle.liftRequest(req))
     .then(Shuttle.liftMutatingFunction('data', aDbService.addAnalyzer, 'requester.userId', 'data.name', 'data.categories'))
     .then(Shuttle.liftMutatingFunction('data', shaper.shapeOutgoingAnalyzer, 'data'))
     .then(successes.sendCreated(res))
+    .catch(errors.sendError(res));
+}
+
+export function getAnalyzers(req, res) {
+  return Promise.resolve(Shuttle.liftRequest(req))
+    .then(Shuttle.liftMutatingFunction('data', aDbService.fetchAnalyzerRecords, 'requester.userId'))
+    .then(Shuttle.liftMutatingFunction('data', shaper.shapeOutgoingAnalyzerArray, 'data.rows'))
+    .then(successes.sendSuccess(res))
     .catch(errors.sendError(res));
 }
 

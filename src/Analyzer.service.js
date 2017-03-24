@@ -1,6 +1,6 @@
 // import uuid from 'uuid';
 import tokenizer from './tokenizer';
-import { exists, binarySearchById, getCategoryDocs } from './Helper.service';
+import { exists, binarySearchByKey, getCategoryDocs } from './Helper.service';
 import * as aDbService from './Analyzer.dbService';
 import { BadRequestError } from './errors';
 // import TextAnalyzer from './TextAnalyzer';
@@ -36,7 +36,7 @@ export async function learn(userId, analyzerId, text, category) {
 
   tokens.forEach((token) => {
     const tokenId = aDbService.getAnalyzerTokenId(userId, analyzerId, token);
-    const record = binarySearchById(tokenId, analyzerRecords.rows, 'key');
+    const record = binarySearchByKey(tokenId, analyzerRecords.rows, 'key');
     let doc;
     // a row will still be returned for an id that doesn't exist...
     if (!exists(record.error)) {
@@ -109,7 +109,7 @@ export async function unlearn(userId, analyzerId, text, category) {
 
   tokens.forEach((token) => {
     const tokenId = aDbService.getAnalyzerTokenId(userId, analyzerId, token);
-    const record = binarySearchById(tokenId, analyzerRecords.rows, 'key');
+    const record = binarySearchByKey(tokenId, analyzerRecords.rows, 'key');
     let doc;
     // a row will still be returned for an id that doesn't exist...
     if (!exists(record.error)) {
@@ -186,7 +186,7 @@ export async function relearn(userId, analyzerId, text, oldCategory, newCategory
 
   tokens.forEach((token) => {
     const tokenId = aDbService.getAnalyzerTokenId(userId, analyzerId, token);
-    const record = binarySearchById(tokenId, analyzerRecords.rows, 'key');
+    const record = binarySearchByKey(tokenId, analyzerRecords.rows, 'key');
     let doc;
     // a row will still be returned for an id that doesn't exist...
     if (!exists(record.error)) {
@@ -247,7 +247,7 @@ export async function categorize(userId, analyzerId, text) {
     // console.log('********');
     // console.log('CATEGORY', category);
     const categoryId = aDbService.getCategoryId(userId, analyzerId, category);
-    const cat = binarySearchById(categoryId, analyzerDocs.rows, 'key').doc;
+    const cat = binarySearchByKey(categoryId, analyzerDocs.rows, 'key').doc;
     // calculate pCategory (category.totalDocCount /analyzer.totalDocCount)
     // console.log('CAT DOC COUNT', cat.totalDocCount);
     // console.log('CAT TOKEN COUNT', cat.totalTokenCount);
@@ -258,7 +258,7 @@ export async function categorize(userId, analyzerId, text) {
       const tokenId = aDbService.getAnalyzerTokenId(userId, analyzerId, token);
       // console.log('----');
       // console.log('TOKEN: ', token);
-      const tokenDoc = binarySearchById(tokenId, analyzerDocs.rows, 'key');
+      const tokenDoc = binarySearchByKey(tokenId, analyzerDocs.rows, 'key');
       let catTokenCount = 0.0;
       let aTokenCount = 0.0;
       if (exists(tokenDoc)) {

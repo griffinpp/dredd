@@ -4,7 +4,9 @@
   "description": "bayesian text analyzer (the doctor is in!)",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "lint": "eslint .",
+    "dev": "nodemon --exec 'npm run lint && babel-node src/serve.js'"
   },
   "author": "Rhinogram",
   "license": "ISC",
@@ -23,11 +25,16 @@
     "uuid": "^3.0.1"
   },
   "devDependencies": {
+    "chai": "^3.5.0",
+    "chai-as-promised": "^6.0.0",
     "eslint": "^3.17.1",
     "eslint-config-airbnb": "^14.1.0",
     "eslint-plugin-babel": "^4.1.1",
     "eslint-plugin-import": "^2.2.0",
     "eslint-plugin-jsx-a11y": "^4.0.0",
-    "eslint-plugin-react": "^6.10.0"
+    "eslint-plugin-react": "^6.10.0",
+    "mocha": "^3.2.0",
+    "nodemon": "^1.11.0",
+    "sinon": "^2.1.0"
   }
 }

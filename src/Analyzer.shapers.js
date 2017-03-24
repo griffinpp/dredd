@@ -21,11 +21,13 @@ export function shapeOutgoingAnalyzerArray(data) {
 }
 
 export function shapeOutgoingAnalyzer(data) {
-  const id = exists(data.id) ? data.id : data._id;
+  const id = data.id;
   const { analyzerId } = splitAnalyzerId(id);
-  const name = exists(data.doc) ? data.doc.name : data.name;
+  const name = data.doc.name;
+  const categories = exists(data.doc.categories) ? data.doc.categories : undefined;
   return {
     id: analyzerId,
     name,
+    categories,
   };
 }

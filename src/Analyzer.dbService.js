@@ -3,16 +3,15 @@ import uuid from 'uuid';
 import bcrypt from 'bcryptjs';
 
 import { exists } from './Helper.service';
-import * as errors from './errors';
 
 const db = new Pouch('https://pgriffin:8jiCZ8klsMPl93rM@rhinogram-backend.com:5984/lucy_test');
 
-export async function addUser(name, password1, password2) {
+export async function addUser(name, password) {
   const id = generateUserId();
   const user = {
     _id: id,
     name,
-    password: bcrypt.hashSync(password1, 10),
+    password: bcrypt.hashSync(password, 10),
     type: 'user',
   };
   await saveRecord(user);
@@ -64,41 +63,22 @@ export async function editAnalyzerName(userId, analyzerId, name) {
 export async function addCategory(userId, analyzerId, name) {
   const category = generateNewCategoryDoc(userId, analyzerId, name);
   await saveRecord(category);
-  return cat;
+  return category;
 }
 
-// note that we're not updating the total count on the category itself, that will need to happen elsewhere
-export async function addCategoryToken(userId, analyzerId, category, token) {
-  const existing = await fetchAnalyzerToken(userId, analyzerId, token);
-  if (exists(existing)) {
-    if (exists(existing.counts[category])) {
-      existing.counts[category] += 1;
-    } else {
-      existing.counts[category] = 1;
-    }
-    await saveRecord(existing);
-  } else {
-    const newToken = {
-      _id: getCategoryTokenId(userId, analyzerId, category, token),
-      type: 'categoryToken',
-      counts: {},
-    };
-    newToken.counts[category] = 1;
-    await saveRecord(newToken);
-  }
-}
-
-export async function removeCategoryToken(userId, analyzerId, category, token) {
-  const existing = await fetchAnalyzerToken(userId, analyzerId, token);
-  if (existing.counts[category] > 0) {
-    existing.counts[category] -= 1;
-    await saveRecord(existing);
-  }
-}
-
-export function fetchAnalyzer(userId, analyzerId) {
-  const dbAnalyzerId = getAnalyzerId(userId, analyzerId);
-  return fetchRecord(dbAnalyzerId);
+export async function fetchAnalyzer(userId, analyzerId) {
+  const startkey = getAnalyzerId(userId, analyzerId);
+  const records = await db.allDocs({
+    startkey,
+    endkey: `${startkey}/$CAT$\uffff`,
+    include_docs: true,
+  });
+  const [analyzer, ...categories] = records.rows;
+  const categoryNames = categories.map((record) => {
+    return record.doc.name;
+  });
+  analyzer.doc.categories = categoryNames;
+  return analyzer;
 }
 
 export function fetchCategory(userId, analyzerId, name) {
@@ -162,7 +142,7 @@ export function fetchRecord(id) {
         return null;
       }
       throw err;
-    })
+    });
 }
 
 export function fetchRecords(ids) {
@@ -198,10 +178,10 @@ export function getAnalyzerId(userId, analyzerId) {
 
 export function getCategoryId(userId, analyzerId, category) {
   const dbAnalyzerId = getAnalyzerId(userId, analyzerId);
-  return `${dbAnalyzerId}/$CAT$${category}`
+  return `${dbAnalyzerId}/$CAT$${category}`;
 }
 
 export function getAnalyzerTokenId(userId, analyzerId, token) {
   const dbAnalyzerId = getAnalyzerId(userId, analyzerId);
-  return `${dbAnalyzerId}/$TOKEN$${token}`
+  return `${dbAnalyzerId}/$TOKEN$${token}`;
 }

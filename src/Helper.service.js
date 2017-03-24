@@ -9,12 +9,12 @@ export function splitAnalyzerId(id) {
   const split = id.split('/');
   return {
     userId: split[0],
-    analyzerId: split[1]
+    analyzerId: split[1],
   };
 }
 
 // for searching sorted arrays in logarithmic time
-export function binarySearchById(searchKey, array, key) {
+export function binarySearchByKey(searchKey, array, key) {
   let lowerIndex = 0;
   let upperIndex = array.length - 1;
   while (upperIndex - lowerIndex > 1) {
