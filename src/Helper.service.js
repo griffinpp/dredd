@@ -13,6 +13,13 @@ export function splitAnalyzerId(id) {
   };
 }
 
+export function resetNegative(number) {
+  if (number < 0) {
+    return 0;
+  }
+  return number;
+}
+
 // for searching sorted arrays in logarithmic time
 export function binarySearchByKey(searchKey, array, key) {
   let lowerIndex = 0;

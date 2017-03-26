@@ -1,6 +1,6 @@
 // import uuid from 'uuid';
 import tokenizer from './tokenizer';
-import { exists, binarySearchByKey, getCategoryDocs } from './Helper.service';
+import { exists, binarySearchByKey, getCategoryDocs, resetNegative } from './Helper.service';
 import * as aDbService from './Analyzer.dbService';
 import { BadRequestError } from './errors';
 // import TextAnalyzer from './TextAnalyzer';
@@ -37,26 +37,7 @@ export async function learn(userId, analyzerId, text, category) {
   tokens.forEach((token) => {
     const tokenId = aDbService.getAnalyzerTokenId(userId, analyzerId, token);
     const record = binarySearchByKey(tokenId, analyzerRecords.rows, 'key');
-    let doc;
-    // a row will still be returned for an id that doesn't exist...
-    if (!exists(record.error)) {
-      doc = record.doc;
-      if (exists(doc.counts[category])) {
-        doc.counts[category] += 1;
-      } else {
-        doc.counts[category] = 1;
-      }
-    } else {
-      // reconfigure the doc to be recognized as one that came from the db
-      delete record.error;
-      record.doc = {
-        _id: tokenId,
-        type: 'token',
-        counts: {},
-      };
-      record.doc.counts[category] = 1;
-      doc = record.doc;
-    }
+    const doc = getUpdatedTokenDoc(record, category, 'increment');
     // if we've already added the doc to the updates list,
     if (!updates.find((item) => { return item._id === tokenId; })) {
       updates.push(doc);
@@ -84,53 +65,25 @@ export async function unlearn(userId, analyzerId, text, category) {
   const cat = catRecord.doc;
 
   // decrement analyzer doc count
-  if (analyzer.totalDocCount > 0) {
-    analyzer.totalDocCount -= 1;
-  }
+  analyzer.totalDocCount -= 1;
+  analyzer.totalDocCount = resetNegative(analyzer.totalDocCount);
   // decrement category doc count
-  if (cat.totalDocCount > 0) {
-    cat.totalDocCount -= 1;
-  }
+  cat.totalDocCount -= 1;
+  cat.totalDocCount = resetNegative(cat.totalDocCount);
 
   // decrement tokens length from analyzer token count
-  if (analyzer.totalTokenCount >= tokens.length) {
-    analyzer.totalTokenCount -= tokens.length;
-  } else {
-    analyzer.totalTokenCount = 0;
-  }
+  analyzer.totalTokenCount -= tokens.length;
+  analyzer.totalTokenCount = resetNegative(analyzer.totalTokenCount);
   // decrement tokens length from category token count
-  if (cat.totalTokenCount >= tokens.length) {
-    cat.totalTokenCount -= tokens.length;
-  } else {
-    cat.totalTokenCount = 0;
-  }
+  cat.totalTokenCount -= tokens.length;
+  cat.totalTokenCount = resetNegative(cat.totalTokenCount);
 
   const updates = [analyzer, cat];
 
   tokens.forEach((token) => {
     const tokenId = aDbService.getAnalyzerTokenId(userId, analyzerId, token);
     const record = binarySearchByKey(tokenId, analyzerRecords.rows, 'key');
-    let doc;
-    // a row will still be returned for an id that doesn't exist...
-    if (!exists(record.error)) {
-      doc = record.doc;
-      // don't take the count below 0...
-      if (exists(doc.counts[category]) && doc.counts[category] > 0) {
-        doc.counts[category] -= 1;
-      } else {
-        doc.counts[category] = 0;
-      }
-    } else {
-      // reconfigure the doc to be recognized as one that came from the db
-      delete record.error;
-      record.doc = {
-        _id: tokenId,
-        type: 'token',
-        counts: {},
-      };
-      record.doc.counts[category] = 0;
-      doc = record.doc;
-    }
+    const doc = getUpdatedTokenDoc(record, category, 'decrement');
     // if we've already added the doc to the updates list,
     if (!updates.find((item) => { return item._id === tokenId; })) {
       updates.push(doc);
@@ -141,7 +94,7 @@ export async function unlearn(userId, analyzerId, text, category) {
   await aDbService.saveRecords(updates);
 }
 
-// doing everything in one read and one write to speed things up
+// doing everything in one read and one write rather than calling .learn and .unlearn to speed things up
 export async function relearn(userId, analyzerId, text, oldCategory, newCategory) {
   // generate tokens
   const tokens = tokenizer(text);
@@ -167,18 +120,14 @@ export async function relearn(userId, analyzerId, text, oldCategory, newCategory
   }
 
   // decrement old category doc count
-  if (oldCat.totalDocCount > 0) {
-    oldCat.totalDocCount -= 1;
-  }
+  oldCat.totalDocCount -= 1;
+  oldCat.totalDocCount = resetNegative(oldCat.totalDocCount);
   // increment new category doc count
   newCat.totalDocCount += 1;
 
   // decrement tokens length from category token count
-  if (oldCat.totalTokenCount >= tokens.length) {
-    oldCat.totalTokenCount -= tokens.length;
-  } else {
-    oldCat.totalTokenCount = 0;
-  }
+  oldCat.totalTokenCount -= tokens.length;
+  oldCat.totalTokenCount = resetNegative(oldCat.totalTokenCount);
 
   newCat.totalTokenCount += tokens.length;
 
@@ -187,33 +136,9 @@ export async function relearn(userId, analyzerId, text, oldCategory, newCategory
   tokens.forEach((token) => {
     const tokenId = aDbService.getAnalyzerTokenId(userId, analyzerId, token);
     const record = binarySearchByKey(tokenId, analyzerRecords.rows, 'key');
-    let doc;
-    // a row will still be returned for an id that doesn't exist...
-    if (!exists(record.error)) {
-      doc = record.doc;
-      // don't take the count below 0...
-      if (exists(doc.counts[oldCategory]) && doc.counts[oldCategory] > 0) {
-        doc.counts[oldCategory] -= 1;
-      } else {
-        doc.counts[oldCategory] = 0;
-      }
-      if (exists(doc.counts[newCategory])) {
-        doc.counts[newCategory] += 1;
-      } else {
-        doc.counts[newCategory] = 1;
-      }
-    } else {
-      // reconfigure the doc to be recognized as one that came from the db
-      delete record.error;
-      record.doc = {
-        _id: tokenId,
-        type: 'token',
-        counts: {},
-      };
-      record.doc.counts[oldCategory] = 0;
-      record.doc.counts[newCategory] = 1;
-      doc = record.doc;
-    }
+    getUpdatedTokenDoc(record, oldCategory, 'decrement');
+    // note that record should have been passed by ref in the last function and the updates to it should be available here
+    const doc = getUpdatedTokenDoc(record, newCategory, 'increment');
     // if we've already added the doc to the updates list,
     if (!updates.find((item) => { return item._id === tokenId; })) {
       updates.push(doc);
@@ -222,6 +147,39 @@ export async function relearn(userId, analyzerId, text, oldCategory, newCategory
 
   // save everything in a bulk update
   await aDbService.saveRecords(updates);
+}
+
+export function getUpdatedTokenDoc(tokenRecord, category, operation) {
+  let increment = 1;
+  let defaultValue = 1;
+  let doc;
+
+  if (operation === 'decrement') {
+    increment = -1;
+    defaultValue = 0;
+  }
+
+  if (!exists(tokenRecord.error)) {
+    doc = tokenRecord.doc;
+    if (exists(doc.counts[category])) {
+      doc.counts[category] += increment;
+      doc.counts[category] = resetNegative(doc.counts[category]);
+    } else {
+      doc.counts[category] = defaultValue;
+    }
+  } else {
+    // reconfigure the doc to be recognized as one that came from the db so we can update it later in the loop
+    delete tokenRecord.error; // eslint-disable-line
+    const newDoc = { // eslint-disable-line
+      _id: tokenRecord.key,
+      type: 'token',
+      counts: {},
+    };
+    newDoc.counts[category] = defaultValue;
+    tokenRecord.doc = newDoc; // eslint-disable-line
+    doc = newDoc;
+  }
+  return doc;
 }
 
 export async function categorize(userId, analyzerId, text) {
