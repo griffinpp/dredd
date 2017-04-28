@@ -3,8 +3,11 @@ import uuid from 'uuid';
 import bcrypt from 'bcryptjs';
 
 import { exists } from './Helper.service';
+import { BadRequestError } from './errors';
 
-const db = new Pouch('https://pgriffin:8jiCZ8klsMPl93rM@rhinogram-backend.com:5984/lucy_test');
+const connectionString = `https://${process.env.DB_USER}:${process.env.DB_PW}@${process.env.DB_HOST}`;
+
+const db = new Pouch(connectionString);
 
 export async function addUser(name, password) {
   const id = generateUserId();
@@ -55,6 +58,9 @@ export async function removeAnalyzer(userId, analyzerId) {
 export async function editAnalyzerName(userId, analyzerId, name) {
   const id = getAnalyzerId(userId, analyzerId);
   const analyzer = await fetchRecord(id);
+  if (!exists(analyzer)) {
+    throw new BadRequestError('Could not find that analyzer');
+  }
   analyzer.name = name;
   await saveRecord(analyzer);
   return analyzer;
@@ -74,6 +80,9 @@ export async function fetchAnalyzer(userId, analyzerId) {
     include_docs: true,
   });
   const [analyzer, ...categories] = records.rows;
+  if (!exists(analyzer)) {
+    throw new BadRequestError(`No analyzer with id ${analyzerId} found`);
+  }
   const categoryNames = categories.map((record) => {
     return record.doc.name;
   });

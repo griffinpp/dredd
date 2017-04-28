@@ -6,14 +6,19 @@ import { exists } from './Helper.service';
 const opts = {};
 // this is the extractor.  We expect the token to be in the 'Authorization' property of the header
 opts.jwtFromRequest = Jwt.ExtractJwt.fromAuthHeader();
-opts.secretOrKey = 'replaceMeWithARandomString';
+opts.secretOrKey = process.env.JWT_SECRET;
 
 const handler = async (payload, next) => {
-  const user = await fetchRecord(payload.userId);
-  if (!exists(user) || !exists(user.type) || user.type !== 'user') {
-    next(null, false);
-  } else {
-    next(null, { userId: payload.userId });
+  try {
+    const user = await fetchRecord(payload.userId);
+    if (!exists(user) || !exists(user.type) || user.type !== 'user') {
+      next(null, false);
+    } else {
+      next(null, { userId: payload.userId });
+    }
+  } catch (err) {
+    console.error(err);
+    next(err);
   }
 };
 

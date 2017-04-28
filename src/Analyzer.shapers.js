@@ -1,10 +1,12 @@
-import { exists, splitAnalyzerId } from './Helper.service';
+import { exists, splitAnalyzerId, decimalToPercent } from './Helper.service';
 
 // eslint-disable-next-line
 export function shapeOutgoingCategoryInfo(data) {
   return {
     category: data.category,
-    relativeProbability: data.relativeProbability,
+    algorithmicProbability: `${decimalToPercent(data.probability)}%`,
+    relativeProbability: `${decimalToPercent(data.relativeProbability)}%`,
+    // confidence: data.confidence,
   };
 }
 
@@ -21,7 +23,7 @@ export function shapeOutgoingAnalyzerArray(data) {
 }
 
 export function shapeOutgoingAnalyzer(data) {
-  const id = data.id;
+  const id = exists(data.id) ? data.id : data._id;
   const { analyzerId } = splitAnalyzerId(id);
   const name = data.doc.name;
   const categories = exists(data.doc.categories) ? data.doc.categories : undefined;

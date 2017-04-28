@@ -20,6 +20,7 @@ export function createUser(req, res) {
 
 export function categorize(req, res) {
   return Promise.resolve(Shuttle.liftRequest(req))
+    .then(Shuttle.debug)
     .then(Shuttle.liftMutatingFunction('data', aService.categorize, 'requester.userId', 'params.analyzerId', 'data.text'))
     .then(Shuttle.liftMutatingFunction('data', shaper.shapeOutgoingCategoryInfo, 'data'))
     .then(successes.sendSuccess(res))

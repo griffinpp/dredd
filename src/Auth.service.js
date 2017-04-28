@@ -17,7 +17,7 @@ export async function login(userId, password) {
   // from now on we'll identify the user by the id and the id is the only personalized value that goes into our token
   const payload = { userId: user._id };
   // TODO: put secret into environment
-  const token = jwt.sign(payload, 'replaceMeWithARandomString');
+  const token = jwt.sign(payload, process.env.JWT_SECRET);
   return {
     message: 'ok',
     token,

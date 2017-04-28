@@ -24,7 +24,7 @@ export function resetNegative(number) {
 export function binarySearchByKey(searchKey, array, key) {
   let lowerIndex = 0;
   let upperIndex = array.length - 1;
-  while (upperIndex - lowerIndex > 1) {
+  while (upperIndex - lowerIndex >= 1) {
     const i = lowerIndex + Math.floor((upperIndex - lowerIndex) / 2);
     if (array[i][key] === searchKey) {
       return array[i];
@@ -49,4 +49,8 @@ export function getCategoryDocs(array) {
     i += 1;
   }
   return results;
+}
+
+export function decimalToPercent(num) {
+  return `${(Math.round(num * 10000) / 100)}%`;
 }

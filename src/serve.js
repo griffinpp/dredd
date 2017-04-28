@@ -2,6 +2,8 @@ import express from 'express';
 import bodyParser from 'body-parser';
 import passport from 'passport';
 
+// this needs to load first
+import './environment';
 import v1Router from './v1.router';
 import jwtStrategy from './Jwt.auth';
 import * as errors from './errors';
@@ -26,7 +28,15 @@ app.use('/', (req, res) => {
 
 const port = process.env.PORT || 8000;
 
+const quotes = [
+  'Everyone is entitled to my opinion.',
+  'I never made a mistake in my life. I thought I did once, but I was wrong.',
+  'When I was your age, I was dumb too.',
+  'My time is valuable. Five dollars and I\'m all ears.',
+];
+const qIndex = Math.floor(Math.random() * quotes.length);
+
 // start the express application
 app.listen(port, () => {
-  console.log(`Lucy listening on port ${port}. The doctor is in!`);
+  console.log(`The psychiatrist is [in] on port ${port}.\n"${quotes[qIndex]}" - Lucy`);
 });
