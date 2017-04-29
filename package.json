@@ -4,7 +4,7 @@
   "description": "bayesian text analyzer (the doctor is in!)",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "mocha --require babel-core/register --recursive test",
     "lint": "eslint .",
     "dev": "nodemon --exec 'npm run lint && babel-node src/serve.js'"
   },
@@ -13,6 +13,8 @@
   "dependencies": {
     "babel-core": "^6.23.1",
     "babel-eslint": "^7.1.1",
+    "babel-plugin-rewire": "1.0.0",
+    "babel-plugin-transform-runtime": "6.15.0",
     "babel-preset-es2015": "^6.22.0",
     "babel-preset-stage-3": "^6.22.0",
     "bcryptjs": "^2.4.3",
