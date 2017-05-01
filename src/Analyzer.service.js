@@ -3,6 +3,9 @@ import { exists, binarySearchByKey, resetNegative } from './Helper.service';
 import * as aDbService from './Analyzer.dbService';
 import { BadRequestError } from './errors';
 
+const MARKOV_WEIGHT = process.env.MARKOV_WEIGHT;
+const NAIVE_BAYES_WEIGHT = 1.0 - MARKOV_WEIGHT;
+
 // records are distinguished from docs here.  Records are the raw data returned from the db and contain a doc in the .doc property
 // records may also contain a .error property instead of a .doc property, usually indicating that an id could not be found
 // docs are the actual data we are generally interested in.
@@ -231,8 +234,8 @@ export function updateTokenRecord(tokenRecord, category, operation) {
 }
 
 export async function categorize(userId, analyzerId, text) {
-  const NAIVE_BAYES_WEIGHT = 0.4;
-  const MARKOV_WEIGHT = 0.6; // weighting things more if we've seen this run of words in this category before
+  // const NAIVE_BAYES_WEIGHT = 0.4;
+  // const MARKOV_WEIGHT = 0.6; // weighting things more if we've seen this run of words in this category before
 
   const rawResults = [];
 
