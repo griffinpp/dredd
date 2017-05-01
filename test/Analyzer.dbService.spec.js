@@ -1,5 +1,7 @@
 import * as sut from '../src/Analyzer.dbService'; // eslint-disable-line
 import { __RewireAPI__ as rw } from '../src/Analyzer.dbService'; // eslint-disable-line
+import { testAfterPromise } from './testHelpers';
+import { BadRequestError } from '../src/errors';
 
 // const uuidRegex = /^[0-9a-z]{8}\-[0-9a-z]{4}\-4[0-9a-z]{3}\-[0-9a-z]{4}\-[0-9a-z]{12}$/; // eslint-disable-line
 
@@ -46,7 +48,7 @@ describe('Analyzer.dbService', () => {
       rw.__ResetDependency__('generateUserId');
       rw.__ResetDependency__('saveRecord');
     });
-    it('should generate a new id for the user', () => {
+    it('should use .generateUserId() to generate a new id for the user', () => {
       sut.addUser('ppg', '12345');
       expect(userIdStub.calledOnce).to.equal(true);
     });
@@ -95,7 +97,7 @@ describe('Analyzer.dbService', () => {
       rw.__ResetDependency__('generateNewCategoryDoc');
       rw.__ResetDependency__('saveRecords');
     });
-    it('should generate a new id for the analyzer', () => {
+    it('should use .generateAnalyzerId() to generate a new id for the analyzer', () => {
       sut.addAnalyzer('1', 'testAnalyzer');
       expect(analyzerIdStub.calledOnce).to.equal(true);
     });
@@ -143,34 +145,358 @@ describe('Analyzer.dbService', () => {
     });
   });
   describe('.removeAnalyzer()', () => {
-
+    const fetchAllStub = sinon.stub();
+    const saveStub = sinon.stub();
+    // setup stubs needed for this function
+    before(() => {
+      rw.__set__({
+        fetchAllRecordsForAnalyzer: fetchAllStub,
+        saveRecord: saveStub,
+      });
+    });
+    // reset stubs after we're done testing the function so as not to interfere with other tests
+    after(() => {
+      rw.__ResetDependency__('fetchAllRecordsForAnalyzer');
+      rw.__ResetDependency__('saveRecord');
+    });
+    // reset our stubs between tests of this function
+    beforeEach(() => {
+      fetchAllStub.reset();
+      fetchAllStub.returns({
+        rows: [
+          {
+            id: '1/2/1',
+            doc: {
+              _id: '1/2/1',
+            },
+          },
+          {
+            id: '1/2/2',
+            doc: {
+              _id: '1/2/2',
+            },
+          },
+        ],
+      });
+      saveStub.reset();
+    });
+    it('should fetch all records related to the specified analyzer', (done) => {
+      testAfterPromise(sut.removeAnalyzer(1, 2), () => {
+        expect(fetchAllStub.args[0][0]).to.equal(1);
+        expect(fetchAllStub.args[0][1]).to.equal(2);
+      }, done);
+    });
+    it('should mark all fetched records deleted and save them', (done) => {
+      testAfterPromise(sut.removeAnalyzer(1, 2), () => {
+        expect(saveStub.calledTwice).to.equal(true);
+        expect(saveStub.args[0][0]).to.deep.equal({ _id: '1/2/1', _deleted: true });
+        expect(saveStub.args[1][0]).to.deep.equal({ _id: '1/2/2', _deleted: true });
+      }, done);
+    });
   });
   describe('.editAnalyzerName()', () => {
-
+    const saveStub = sinon.stub();
+    const getIdStub = sinon.stub();
+    const fetchStub = sinon.stub();
+    before(() => {
+      rw.__set__({
+        saveRecord: saveStub,
+        getAnalyzerId: getIdStub,
+        fetchRecord: fetchStub,
+      });
+    });
+    after(() => {
+      rw.__ResetDependency__('saveRecord');
+      rw.__ResetDependency__('getAnalyzerId');
+      rw.__ResetDependency__('fetchRecord');
+    });
+    beforeEach(() => {
+      saveStub.reset();
+      getIdStub.reset();
+      getIdStub.returns('1/2');
+      fetchStub.reset();
+      fetchStub.returns({
+        id: '1/2',
+        name: 'oldName',
+      });
+    });
+    it('should use .getAnalyzerId() to construct the correct id for the document', () => {
+      sut.editAnalyzerName('1', '2', 'newName');
+      expect(getIdStub.calledOnce).to.equal(true);
+    });
+    it('should attempt to fetch the analyzer document from the database', () => {
+      sut.editAnalyzerName('1', '2', 'newName');
+      expect(fetchStub.args[0][0]).to.equal('1/2');
+    });
+    // these tests check on functions that are called after the first await, and so must use either
+    // chai-as-expected or the testAfterPromise function to make sure the full function has run before checking results
+    describe('when the specified analyzer document is found in the database', () => {
+      it('should update the name property of the analyzer document and save it', (done) => {
+        testAfterPromise(sut.editAnalyzerName('1', '2', 'newName'), () => {
+          expect(saveStub.args[0][0]).to.deep.equal({ id: '1/2', name: 'newName' });
+        }, done);
+      });
+    });
+    describe('when the specified analyzer is not found in the database', () => {
+      // maybe this should be a 404 instead?
+      it('should throw a BadRequestError', (done) => {
+        fetchStub.returns(null);
+        expect(sut.editAnalyzerName('1', '2', 'newName')).to.eventually.be.rejectedWith(BadRequestError).notify(done);
+      });
+    });
   });
   describe('.addCategory()', () => {
-
+    const generateStub = sinon.stub();
+    const saveStub = sinon.stub();
+    before(() => {
+      rw.__set__({
+        generateNewCategoryDoc: generateStub,
+        saveRecord: saveStub,
+      });
+    });
+    after(() => {
+      rw.__ResetDependency__('generateNewCategoryDoc');
+      rw.__ResetDependency__('saveRecord');
+    });
+    beforeEach(() => {
+      generateStub.reset();
+      generateStub.returns({
+        _id: '1/2/$CAT$newCat',
+        name: 'newCat',
+        totalDocCount: 0,
+        totalTokenCount: 0,
+        type: 'category',
+      });
+      saveStub.reset();
+    });
+    it('should use .generateNewCategoryDoc() to create a new category document', () => {
+      sut.addCategory('1', '2', 'newCat');
+      expect(generateStub.args[0]).to.deep.equal(['1', '2', 'newCat']);
+    });
+    it('should save the new category document', () => {
+      sut.addCategory('1', '2', 'newCat');
+      expect(saveStub.args[0][0]).to.deep.equal({
+        _id: '1/2/$CAT$newCat',
+        name: 'newCat',
+        totalDocCount: 0,
+        totalTokenCount: 0,
+        type: 'category',
+      });
+    });
   });
   describe('.fetchAnalyzer()', () => {
-
+    const getIdStub = sinon.stub();
+    before(() => {
+      rw.__set__({
+        getAnalyzerId: getIdStub,
+      });
+    });
+    after(() => {
+      rw.__ResetDependency__('getAnalyzerId');
+    });
+    beforeEach(() => {
+      getIdStub.reset();
+      dbStub.allDocs.returns({
+        rows: [
+          {
+            id: '1/2',
+            doc: {
+              _id: '1/2',
+            },
+          },
+          {
+            id: '1/2/$CAT$one',
+            doc: {
+              _id: '1/2/$CAT$one',
+              name: 'one',
+            },
+          },
+          {
+            id: '1/2/$CAT$two',
+            doc: {
+              _id: '1/2/$CAT$two',
+              name: 'two',
+            },
+          },
+        ],
+      });
+    });
+    it('should use .getAnalyzerId() to construct the analyzer id', () => {
+      sut.fetchAnalyzer('1', '2');
+      expect(getIdStub.args[0]).to.deep.equal(['1', '2']);
+    });
+    it('should fetch the analyzer document and all category documents associated with the analyzer', () => {
+      getIdStub.returns('1/2');
+      sut.fetchAnalyzer('1', '2');
+      expect(dbStub.allDocs.args[0][0]).to.deep.equal({
+        startkey: '1/2',
+        endkey: '1/2/$CAT$\uffff',
+        include_docs: true,
+      });
+    });
+    it('should attach the names of all categories onto the analyzer document and return it', (done) => {
+      expect(sut.fetchAnalyzer('1', '2')).to.eventually.deep.equal({
+        id: '1/2',
+        doc: {
+          _id: '1/2',
+          categories: ['one', 'two'],
+        },
+      }).notify(done);
+    });
+    describe('when the specified analyzer document is not found in the database', () => {
+      it('should throw a BadRequestError', (done) => {
+        dbStub.allDocs.returns({
+          rows: [],
+        });
+        expect(sut.fetchAnalyzer('1', '2')).to.eventually.be.rejectedWith(BadRequestError).notify(done);
+      });
+    });
   });
   describe('.fetchCategory()', () => {
-
+    const getIdStub = sinon.stub();
+    const fetchStub = sinon.stub();
+    before(() => {
+      rw.__set__({
+        getCategoryId: getIdStub,
+        fetchRecord: fetchStub,
+      });
+    });
+    after(() => {
+      rw.__ResetDependency__('getCategoryId');
+      rw.__ResetDependency__('fetchRecord');
+    });
+    beforeEach(() => {
+      getIdStub.reset();
+      getIdStub.returns('1/2/$CAT$one');
+      fetchStub.reset();
+    });
+    it('should use .getCategoryId() to construct the category\'s id', () => {
+      sut.fetchCategory('1', '2', 'one');
+      expect(getIdStub.args[0]).to.deep.equal(['1', '2', 'one']);
+    });
+    it('should fetch the category document using the id', () => {
+      sut.fetchCategory('1', '2', 'one');
+      expect(fetchStub.args[0][0]).to.equal('1/2/$CAT$one');
+    });
   });
   describe('.fetchAnalyzerToken()', () => {
-
+    const getIdStub = sinon.stub();
+    const fetchStub = sinon.stub();
+    before(() => {
+      rw.__set__({
+        getAnalyzerTokenId: getIdStub,
+        fetchRecord: fetchStub,
+      });
+    });
+    after(() => {
+      rw.__ResetDependency__('getAnalyzerTokenId');
+      rw.__ResetDependency__('fetchRecord');
+    });
+    beforeEach(() => {
+      getIdStub.reset();
+      getIdStub.returns('1/2/$TOKEN$word');
+      fetchStub.reset();
+    });
+    it('should use .getAnalyzerTokenId() to construct the token\'s id', () => {
+      sut.fetchAnalyzerToken('1', '2', 'word');
+      expect(getIdStub.args[0]).to.deep.equal(['1', '2', 'word']);
+    });
+    it('should fetch the category document using the id', () => {
+      sut.fetchAnalyzerToken('1', '2', 'word');
+      expect(fetchStub.args[0][0]).to.equal('1/2/$TOKEN$word');
+    });
   });
   describe('.fetchAnalyzerRecords()', () => {
-
+    it('should use the "analyzers" view to get all analyzers for the specified user from the database', () => {
+      sut.fetchAnalyzerRecords('1');
+      expect(dbStub.query.args[0][0]).to.equal('analyzers');
+      expect(dbStub.query.args[0][1]).to.deep.equal({
+        startkey: '1',
+        endkey: '1\uffff',
+        include_docs: true,
+      });
+    });
   });
   describe('.fetchAllRecordsForAnalyzer()', () => {
-
+    const getIdStub = sinon.stub();
+    before(() => {
+      rw.__set__({
+        getAnalyzerId: getIdStub,
+      });
+    });
+    after(() => {
+      rw.__ResetDependency__('getAnalyzerId');
+    });
+    beforeEach(() => {
+      getIdStub.reset();
+      getIdStub.returns('1/2');
+    });
+    it('should use .getAnalyzerId() to construct the startkey', () => {
+      sut.fetchAllRecordsForAnalyzer('1', '2');
+      expect(getIdStub.args[0]).to.deep.equal(['1', '2']);
+    });
+    it('should use .allDocs to fetch all documents related to the specified analyzer', () => {
+      sut.fetchAllRecordsForAnalyzer('1', '2');
+      expect(dbStub.allDocs.args[0][0]).to.deep.equal({
+        startkey: '1/2',
+        endkey: '1/2\uffff',
+        include_docs: true,
+      });
+    });
   });
   describe('.fetchCategoryRecords()', () => {
-
+    const getIdStub = sinon.stub();
+    before(() => {
+      rw.__set__({
+        getAnalyzerId: getIdStub,
+      });
+    });
+    after(() => {
+      rw.__ResetDependency__('getAnalyzerId');
+    });
+    beforeEach(() => {
+      getIdStub.reset();
+      getIdStub.returns('1/2');
+    });
+    it('should use .getAnalyzerId() to construct the startkey', () => {
+      sut.fetchCategoryRecords('1', '2');
+      expect(getIdStub.args[0]).to.deep.equal(['1', '2']);
+    });
+    it('should use .allDocs to fetch all category documents related to the specified analyzer', () => {
+      sut.fetchCategoryRecords('1', '2');
+      expect(dbStub.allDocs.args[0][0]).to.deep.equal({
+        startkey: '1/2/$CAT$',
+        endkey: '1/2/$CAT$\uffff',
+        include_docs: true,
+      });
+    });
   });
   describe('.fetchAnalyzerTokens()', () => {
-
+    const getIdStub = sinon.stub();
+    before(() => {
+      rw.__set__({
+        getAnalyzerId: getIdStub,
+      });
+    });
+    after(() => {
+      rw.__ResetDependency__('getAnalyzerId');
+    });
+    beforeEach(() => {
+      getIdStub.reset();
+      getIdStub.returns('1/2');
+    });
+    it('should use .getAnalyzerId() to construct the startkey', () => {
+      sut.fetchAnalyzerTokens('1', '2');
+      expect(getIdStub.args[0]).to.deep.equal(['1', '2']);
+    });
+    it('should use .allDocs to fetch all category documents related to the specified analyzer', () => {
+      sut.fetchAnalyzerTokens('1', '2');
+      expect(dbStub.allDocs.args[0][0]).to.deep.equal({
+        startkey: '1/2/$TOKEN$',
+        endkey: '1/2/$TOKEN$\uffff',
+        include_docs: true,
+      });
+    });
   });
   describe('.saveRecord()', () => {
     it('should call the db .put function with the passed record', () => {
