@@ -12,6 +12,7 @@
     "$": true,
     "describe": true,
     "it": true,
+    "xit": true,
     "sinon": true,
     "expect": true,
     "before": true,

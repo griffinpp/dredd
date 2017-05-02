@@ -3,8 +3,6 @@ import { __RewireAPI__ as rw } from '../src/Analyzer.dbService'; // eslint-disab
 import { testAfterPromise } from './testHelpers';
 import { BadRequestError } from '../src/errors';
 
-// const uuidRegex = /^[0-9a-z]{8}\-[0-9a-z]{4}\-4[0-9a-z]{3}\-[0-9a-z]{4}\-[0-9a-z]{12}$/; // eslint-disable-line
-
 const dbStub = {
   get: sinon.stub(),
   put: sinon.stub(),

@@ -56,7 +56,8 @@ export async function learn(userId, analyzerId, text, category) {
   await aDbService.saveRecords(updates);
 }
 
-function addToChain(token, tokenRecord, category) {
+// exported for easier testing
+export function addToChain(token, tokenRecord, category) {
   if (exists(tokenRecord) && !exists(tokenRecord.error)) {
     const doc = tokenRecord.doc;
     // we know the category exists because we were just dealing with that token in the last iteration
@@ -68,7 +69,8 @@ function addToChain(token, tokenRecord, category) {
   }
 }
 
-function removeFromChain(token, tokenRecord, category) {
+//exported for easier testing
+export function removeFromChain(token, tokenRecord, category) {
   if (exists(tokenRecord) && !exists(tokenRecord.error)) {
     const doc = tokenRecord.doc;
     if (exists(doc[category].chain[token])) {
@@ -287,7 +289,7 @@ export async function categorize(userId, analyzerId, text) {
       );
 
       // calculate probability that this category's markov chain could have generated this token
-      const pMarkov = calculatePCategoryGivenMarkovChain(prevTokenRecord, token, category);
+      const pMarkov = calculatePCategoryGivenMarkovChain(prevTokenRecord, token, category, pCategory);
 
       // sum probabilities so far
       console.log('pCategoryGivenToken', pCategoryGivenToken);
@@ -327,7 +329,8 @@ export async function categorize(userId, analyzerId, text) {
   });
 }
 
-function appendRelativeProbabilities(results) {
+// exported for easier testing
+export function appendRelativeProbabilities(results) {
   const pSum = results.reduce((sum, item) => {
     return sum + item.probability;
   }, 0.0);
@@ -361,37 +364,44 @@ function appendRelativeProbabilities(results) {
 //   return categoryDocCount / analyzerDocCount;
 // }
 
-function calculatePCategoryViaTokenCount(analyzerTotalTokenCount, categoryTotalTokenCount) {
+// exported for easier testing
+export function calculatePCategoryViaTokenCount(analyzerTotalTokenCount, categoryTotalTokenCount) {
   return analyzerTotalTokenCount === 0 ? 0 : categoryTotalTokenCount / analyzerTotalTokenCount;
 }
 
-function calculatePTokenGivenCategory(tokenCountInCategory, categoryTotalTokenCount) {
+// exported for easier testing
+export function calculatePTokenGivenCategory(tokenCountInCategory, categoryTotalTokenCount) {
   return categoryTotalTokenCount === 0 ? 0 : tokenCountInCategory / categoryTotalTokenCount;
 }
 
-function calculatePTokenGivenNotCategory(tokenCountAllCategories, tokenCountInCategory, analyzerTotalTokenCount, categoryTotalTokenCount) {
+// exported for easier testing
+export function calculatePTokenGivenNotCategory(tokenCountAllCategories, tokenCountInCategory, analyzerTotalTokenCount, categoryTotalTokenCount) {
   return analyzerTotalTokenCount === 0 ? 0 : (tokenCountAllCategories - tokenCountInCategory) / (analyzerTotalTokenCount - categoryTotalTokenCount);
 }
 
-function calculatePToken(pTokenGivenCategory, pTokenGivenNotCategory, pCategory) {
+// exported for easier testing
+export function calculatePToken(pTokenGivenCategory, pTokenGivenNotCategory, pCategory) {
   return (pTokenGivenCategory * pCategory) + (pTokenGivenNotCategory * (1 - pCategory));
 }
 
-function calculatePCategoryGivenToken(tokenCountInCategory, categoryTotalTokenCount, tokenCountAllCategories, analyzerTotalTokenCount, pCategory) {
+// exported for easier testing
+export function calculatePCategoryGivenToken(tokenCountInCategory, categoryTotalTokenCount, tokenCountAllCategories, analyzerTotalTokenCount, pCategory) {
   const pTokenGivenCategory = calculatePTokenGivenCategory(tokenCountInCategory, categoryTotalTokenCount);
   const pTokenGivenNotCategory = calculatePTokenGivenNotCategory(tokenCountAllCategories, tokenCountInCategory, analyzerTotalTokenCount, categoryTotalTokenCount);
   const pToken = calculatePToken(pTokenGivenCategory, pTokenGivenNotCategory, pCategory);
   return pToken === 0 ? 0 : (pTokenGivenCategory * pCategory) / pToken;
 }
 
-function getTokenCountInCategory(tokenRecord, category) {
+// exported for easier testing
+export function getTokenCountInCategory(tokenRecord, category) {
   if (exists(tokenRecord) && !exists(tokenRecord.error) && exists(tokenRecord.doc[category])) {
     return tokenRecord.doc[category].count;
   }
   return 0.0;
 }
 
-function getTokenCountAllCategories(tokenRecord, categories) {
+// exported for easier testing
+export function getTokenCountAllCategories(tokenRecord, categories) {
   if (exists(tokenRecord) && !exists(tokenRecord.error)) {
     return categories.reduce((sum, item) => {
       if (exists(tokenRecord.doc[item])) {
@@ -403,25 +413,27 @@ function getTokenCountAllCategories(tokenRecord, categories) {
   return 0.0;
 }
 
-// currentToken should be the word itself...
-function calculatePCategoryGivenMarkovChain(prevTokenRecord, currentToken, category) {
+// if p chain | category = (count of this token in previous chain / chain size), what is p chain | !category?
+// (count of this token in all other chains / total chain sizes - this chain size)
+// exported for easier testing
+// currentToken should be the string word itself, not a document
+// this is really just calculating p chain given category, what we want is p category given chain...
+export function calculatePCategoryGivenMarkovChain(prevTokenRecord, currentToken, category, pCategory) {
   if (exists(prevTokenRecord)
     && !exists(prevTokenRecord.error)
     && exists(prevTokenRecord.doc[category])
+    && prevTokenRecord.doc[category].chainSize > 0
     && exists(prevTokenRecord.doc[category].chain[currentToken])
   ) {
-    // all words have been unlearned from the chain for this token
-    if (prevTokenRecord.doc[category].chainSize === 0) {
-      return 0.0;
-    }
     // calculate the probability that this token could have been selected at random given the previous token
     // (number of times this token has followed the previous token / number of times any token has followed the previous token)
-    return prevTokenRecord.doc[category].chain[currentToken] / prevTokenRecord.doc[category].chainSize;
+    return (prevTokenRecord.doc[category].chain[currentToken] / prevTokenRecord.doc[category].chainSize) * pCategory;
   }
   return 0.0;
 }
 
-function getSortedTokenIds(userId, analyzerId, tokens) {
+// exported for easier testing
+export function getSortedTokenIds(userId, analyzerId, tokens) {
   const tokenIds = new Set();
   tokens.forEach((t) => {
     tokenIds.add(aDbService.getAnalyzerTokenId(userId, analyzerId, t));
