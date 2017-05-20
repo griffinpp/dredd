@@ -17,6 +17,6 @@ export function testAfterPromise(promise, fn, done) {
       done(err);
     }
   }).catch((err) => {
-    done(new Error(`Uncaught error was thrown: ${err.message}`));
+    done(new Error(`Uncaught error was thrown: ${err.stack}`));
   });
 }

@@ -289,7 +289,7 @@ export async function categorize(userId, analyzerId, text) {
       );
 
       // calculate probability that this category's markov chain could have generated this token
-      const pMarkov = calculatePCategoryGivenMarkovChain(prevTokenRecord, token, category, pCategory);
+      const pMarkov = calculatePCategoryGivenMarkovChain(prevTokenRecord, token, category);
 
       // sum probabilities so far
       console.log('pCategoryGivenToken', pCategoryGivenToken);
@@ -413,12 +413,17 @@ export function getTokenCountAllCategories(tokenRecord, categories) {
   return 0.0;
 }
 
-// if p chain | category = (count of this token in previous chain / chain size), what is p chain | !category?
-// (count of this token in all other chains / total chain sizes - this chain size)
 // exported for easier testing
+/*
+So after a lot of back and forth over whether to somehow include the word count-based pCategory in this calculation,
+(with questions like "what if the probability that this chain created the word is huge, but this is a tiny category?")
+it finally occured to me that pCategory is accounted for in the bayesian calculation, which this calculation is not
+concerned with at all. If pCategory is tiny and pMarkov is huge, things balance out when the two are added together later in .categorize().
+Ignoring pCategory is exactly what we are /trying/ to do with the markov chain. It /should/ ignore overall word frequency
+and concern itself entirely with whether the current chain could have generated this token.
+ */
 // currentToken should be the string word itself, not a document
-// this is really just calculating p chain given category, what we want is p category given chain...
-export function calculatePCategoryGivenMarkovChain(prevTokenRecord, currentToken, category, pCategory) {
+export function calculatePCategoryGivenMarkovChain(prevTokenRecord, currentToken, category) {
   if (exists(prevTokenRecord)
     && !exists(prevTokenRecord.error)
     && exists(prevTokenRecord.doc[category])
@@ -427,7 +432,7 @@ export function calculatePCategoryGivenMarkovChain(prevTokenRecord, currentToken
   ) {
     // calculate the probability that this token could have been selected at random given the previous token
     // (number of times this token has followed the previous token / number of times any token has followed the previous token)
-    return (prevTokenRecord.doc[category].chain[currentToken] / prevTokenRecord.doc[category].chainSize) * pCategory;
+    return prevTokenRecord.doc[category].chain[currentToken] / prevTokenRecord.doc[category].chainSize;
   }
   return 0.0;
 }

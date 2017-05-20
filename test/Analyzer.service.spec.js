@@ -1,6 +1,6 @@
 import * as sut from '../src/Analyzer.service'; // eslint-disable-line
 import { __RewireAPI__ as rw } from '../src/Analyzer.service'; // eslint-disable-line
-// import { testAfterPromise } from './testHelpers';
+import { testAfterPromise } from './testHelpers';
 // import { BadRequestError } from '../src/errors';
 
 // stub out the db service
@@ -30,6 +30,9 @@ const dbStub = {
 const tokenizerStub = sinon.stub();
 const searchStub = sinon.stub();
 const resetNegStub = sinon.stub();
+const getSortedStub = sinon.stub();
+const updateStub = sinon.stub();
+const chainStub = sinon.stub();
 
 function stubReset() {
   for (const stub in dbStub) {
@@ -39,6 +42,10 @@ function stubReset() {
     tokenizerStub.reset();
     searchStub.reset();
     resetNegStub.reset();
+    getSortedStub.reset();
+    searchStub.reset();
+    updateStub.reset();
+    chainStub.reset();
   }
 }
 
@@ -47,7 +54,229 @@ describe('Analyzer.service', () => {
     stubReset();
   });
   describe('.learn()', () => {
+    const newCatDoc = {};
+    const sorted  = ['1/1/$TOKEN$hello', '1/1/$TOKEN$there'];
+    const tokens = ['hello', 'there'];
+    let token1Doc;
+    let token2Doc;
+    let dbRecords;
 
+    before(() => {
+      rw.__set__({
+        aDbService: dbStub,
+        tokenizer: tokenizerStub,
+        getSortedTokenIds: getSortedStub,
+        binarySearchByKey: searchStub,
+        updateTokenRecord: updateStub,
+        addToChain: chainStub,
+      });
+    });
+    after(() => {
+      rw.__ResetDependency__('aDbService');
+      rw.__ResetDependency__('tokenizer');
+      rw.__ResetDependency__('getSortedTokenIds');
+      rw.__ResetDependency__('binarySearchByKey');
+      rw.__ResetDependency__('updateTokenRecord');
+      rw.__ResetDependency__('addToChain');
+    });
+
+    beforeEach(() => {
+      token1Doc = {
+        id: '1/1/$TOKEN$hello',
+        doc: {
+          _id: '1/1/$TOKEN$hello',
+          name: 'hello',
+          type: 'token',
+          one: {
+            count: 1,
+            chain: {
+              any: 1,
+            },
+            chainSize: 1,
+          },
+          two: {
+            count: 1,
+            chain: {
+              some: 2,
+            },
+            chainSize: 2,
+          },
+        },
+      };
+      token2Doc = {
+        id: '1/1/$TOKEN$there',
+        doc: {
+          _id: '1/1/$TOKEN$there',
+          name: 'there',
+          type: 'token',
+          one: {
+            count: 0,
+            chain: {
+            },
+            chainSize: 0,
+          },
+          two: {
+            count: 0,
+            chain: {
+            },
+            chainSize: 0,
+          },
+        },
+      };
+      dbRecords = {
+        rows: [
+          {
+            id: '1/1',
+            doc: {
+              _id: '1/1',
+              name: 'test analyzer',
+              totalDocCount: 4,
+              totalTokenCount: 20,
+              type: 'analyzer',
+            },
+          },
+          {
+            id: '1/1/$CAT$one',
+            doc: {
+              _id: '1/1/$CAT$one',
+              name: 'one',
+              totalDocCount: 2,
+              totalTokenCount: 8,
+              type: 'category',
+            },
+          },
+          token1Doc,
+          token2Doc,
+        ],
+      };
+      // functions to stub:
+      // aDbService .getAnalyzerId .getCategoryId .fetchRecords .generateNewCategoryDoc .getAnalyzerTokenId .saveRecords
+      // getSortedTokenIds
+      // binarySearchByKey
+      // updateTokenRecord
+      // addToChain
+      dbStub.getAnalyzerId.returns('1/1');
+      dbStub.getCategoryId.returns('1/1/$CAT$one');
+      dbStub.fetchRecords.returns(dbRecords);
+      dbStub.generateNewCategoryDoc.returns(newCatDoc);
+      dbStub.getAnalyzerTokenId.returns(null);
+
+      tokenizerStub.returns(tokens);
+      getSortedStub.returns(sorted);
+      searchStub.onCall(0).returns(token1Doc);
+      searchStub.onCall(1).returns(token2Doc);
+      updateStub.returns(null);
+      chainStub.returns(null);
+    });
+    afterEach(() => {
+      stubReset();
+    });
+    it('should tokenize the input', (done) => {
+      // console.log(tokenizerStub());
+      testAfterPromise(sut.learn('1', '1', 'hello there', 'one'), () => {
+        expect(tokenizerStub.calledWith('hello there')).to.equal(true);
+      }, done);
+    });
+
+    it('should fetch the id for the root analyzer document', (done) => {
+      testAfterPromise(sut.learn('1', '1', 'hello there', 'one'), () => {
+        expect(dbStub.getAnalyzerId.calledWith('1', '1')).to.equal(true);
+      }, done);
+    });
+
+    it('should fetch the id for the category document', (done) => {
+      testAfterPromise(sut.learn('1', '1', 'hello there', 'one'), () => {
+        expect(dbStub.getCategoryId.calledWith('1', '1', 'one')).to.equal(true);
+      }, done);
+    });
+    it('should fetch the sorted ids for the tokens', (done) => {
+      testAfterPromise(sut.learn('1', '1', 'hello there', 'one'), () => {
+        expect(getSortedStub.calledWith('1', '1', ['hello', 'there'])).to.equal(true);
+      }, done);
+    });
+    it('should use the fetched ids to retrieve all documents from the db', (done) => {
+      testAfterPromise(sut.learn('1', '1', 'hello there', 'one'), () => {
+        expect(dbStub.fetchRecords.calledWith(['1/1', '1/1/$CAT$one', '1/1/$TOKEN$hello', '1/1/$TOKEN$there'])).to.equal(true);
+      }, done);
+    });
+    describe('when the category does not exist in the db', () => {
+      beforeEach(() => {
+        const withoutCategory = {
+          rows: [
+            {
+              id: '1/1',
+              doc: {
+                _id: '1/1',
+                name: 'test analyzer',
+                totalDocCount: 4,
+                totalTokenCount: 20,
+                type: 'analyzer',
+              },
+            },
+            {
+              id: '1/1/$CAT$one',
+              error: 'not found',
+            },
+            token1Doc,
+            token2Doc,
+          ],
+        };
+        dbStub.fetchRecords.returns(withoutCategory);
+      });
+      it('should generate a new category document', (done) => {
+        testAfterPromise(sut.learn('1', '1', 'hello there', 'one'), () => {
+          expect(dbStub.generateNewCategoryDoc.calledWith('1', '1', 'one')).to.equal(true);
+        }, done);
+      });
+    });
+    it('should increment the total document count for the analyzer', (done) => {
+      testAfterPromise(sut.learn('1', '1', 'hello there', 'one'), () => {
+        expect(dbStub.saveRecords.args[0][0][0].totalDocCount).to.equal(5);
+      }, done);
+    });
+    it('should increment the total document count for the category', (done) => {
+      testAfterPromise(sut.learn('1', '1', 'hello there', 'one'), () => {
+        expect(dbStub.saveRecords.args[0][0][1].totalDocCount).to.equal(3);
+      }, done);
+    });
+    it('should increase the total token count in the analyzer by the number of input tokens', (done) => {
+      testAfterPromise(sut.learn('1', '1', 'hello there', 'one'), () => {
+        expect(dbStub.saveRecords.args[0][0][0].totalTokenCount).to.equal(22);
+      }, done);
+    });
+    it('should increase the total token count in the category by the number of input tokens', (done) => {
+      testAfterPromise(sut.learn('1', '1', 'hello there', 'one'), () => {
+        expect(dbStub.saveRecords.args[0][0][1].totalTokenCount).to.equal(10);
+      }, done);
+    });
+    it('should call .updateTokenRecord to handle each token\'s stats', (done) => {
+      testAfterPromise(sut.learn('1', '1', 'hello there', 'one'), () => {
+        expect(updateStub.args[0][0].id).to.equal('1/1/$TOKEN$hello');
+        expect(updateStub.args[0][1]).to.equal('one');
+        expect(updateStub.args[0][2]).to.equal('increment');
+        expect(updateStub.args[1][0].id).to.equal('1/1/$TOKEN$there');
+        expect(updateStub.args[1][1]).to.equal('one');
+        expect(updateStub.args[1][2]).to.equal('increment');
+      }, done);
+    });
+    it('should add each token to the chain of the previous token', (done) => {
+      testAfterPromise(sut.learn('1', '1', 'hello there', 'one'), () => {
+        expect(chainStub.args[0][0]).to.equal('hello');
+        expect(chainStub.args[0][1]).to.equal(null);
+        expect(chainStub.args[0][2]).to.equal('one');
+        expect(chainStub.args[1][0]).to.equal('there');
+        expect(chainStub.args[1][1].id).to.equal('1/1/$TOKEN$hello');
+        expect(chainStub.args[1][2]).to.equal('one');
+      }, done);
+    });
+    it('should save all updated records to the db', (done) => {
+      testAfterPromise(sut.learn('1', '1', 'hello there', 'one'), () => {
+        expect(dbStub.saveRecords.args[0][0][0]._id).to.equal('1/1');
+        expect(dbStub.saveRecords.args[0][0][1]._id).to.equal('1/1/$CAT$one');
+        expect(dbStub.saveRecords.args[0][0][2]._id).to.equal('1/1/$TOKEN$hello');
+        expect(dbStub.saveRecords.args[0][0][3]._id).to.equal('1/1/$TOKEN$there');
+      }, done);
+    });
   });
   describe('.unlearn()', () => {
 
@@ -252,9 +481,11 @@ describe('Analyzer.service', () => {
         },
       },
     };
-    // I have gone around a few times with what constitutes the "correct" probability here...
     it('should return the correct probability', () => {
-      expect(sut.calculatePCategoryGivenMarkovChain(prevRecord, 'security', 'one', 0.4)).to.equal(0.2);
+      // the current token has come after the previous token 50% of the time whenever the previous token
+      // was taught to this category, which would be a HUGE marker that this sequence should probably belong to
+      // this category.
+      expect(sut.calculatePCategoryGivenMarkovChain(prevRecord, 'security', 'one')).to.equal(0.5);
     });
     describe('when a previous token record is not provided', () => {
       it('should return 0', () => {

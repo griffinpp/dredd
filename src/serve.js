@@ -33,6 +33,7 @@ const quotes = [
   'I never made a mistake in my life. I thought I did once, but I was wrong.',
   'When I was your age, I was dumb too.',
   'My time is valuable. Five dollars and I\'m all ears.',
+  'If everyone agreed with me, they\'d all be right!',
 ];
 const qIndex = Math.floor(Math.random() * quotes.length);
 
